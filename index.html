@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Simulador de Campo de Esfregaço — Leucograma (v7)</title>
+<style>
+  :root{
+    --bg:#f0f2f7;
+    --panel:#ffffff;
+    --ink:#0f172a;
+    --muted:#64748b;
+    --accent:#2563eb;
+    --accent-soft:#eef2ff;
+    --accent-dark:#3730a3;
+    --border:#e2e5eb;
+    --shadow:0 8px 32px rgba(0,0,0,.07);
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:'Segoe UI',system-ui,-apple-system,Roboto,Ubuntu,sans-serif;font-size:14px;line-height:1.45}
+  .app{display:grid;grid-template-columns:400px 1fr;gap:14px;max-width:1700px;margin:0 auto;padding:14px;min-height:100vh}
+  .panel{background:var(--panel);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;overflow-y:auto}
+  .panel.left{max-height:100vh;overflow-y:auto}
+  h1{font-size:18px;margin:4px 0 6px;letter-spacing:-0.3px}
+  h2{font-size:13px;margin:14px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:700}
+  .ctrl{display:grid;gap:6px}
+  .row{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center}
+  label{font-weight:600;font-size:13px}
+  input[type=range]{width:100%;accent-color:var(--accent);height:6px}
+  select{width:100%;padding:9px 10px;border-radius:10px;border:1px solid var(--border);background:#fff;font-size:13px}
+  .small{font-size:11.5px;color:var(--muted);line-height:1.35}
+  .badge{display:inline-block;background:var(--accent-soft);color:var(--accent-dark);border-radius:999px;padding:1px 9px;font-size:12px;font-weight:600;min-width:32px;text-align:center}
+  .btn{appearance:none;border:1px solid var(--border);border-radius:10px;padding:9px 10px;background:#fff;cursor:pointer;font-size:12.5px;font-weight:600;transition:all .15s}
+  .btn:hover{background:var(--accent-soft);border-color:var(--accent)}
+  .btn:active{transform:scale(0.97)}
+  .legend{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+  .legend .item{display:flex;align-items:center;gap:5px;font-size:11px;color:#111827;background:#f3f4f6;padding:3px 7px;border-radius:999px}
+  .dot{width:9px;height:9px;border-radius:999px;display:inline-block;flex-shrink:0}
+  .canvas-wrap{position:relative;width:100%;display:flex;align-items:center;justify-content:center}
+  canvas#smear{width:100%;height:auto;background:#fafafa;border-radius:var(--radius);box-shadow:inset 0 0 0 1px var(--border);cursor:grab}
+  canvas#smear:active{cursor:grabbing}
+  .note{font-size:11.5px;color:#6b7280;margin-top:8px;line-height:1.3;min-height:1.3em}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+  .panner{display:grid;grid-template-columns:1fr 48px 1fr;grid-template-rows:48px 48px 48px;gap:4px;justify-items:center;align-items:center;margin-top:6px}
+  .panner .arrow{width:48px;height:48px;border-radius:10px;border:1px solid var(--border);background:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;transition:all .15s}
+  .panner .arrow:hover{background:var(--accent-soft);border-color:var(--accent)}
+  .mini{margin-top:4px;font-size:11px;color:#6b7280}
+  .kbd{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#f3f4f6;border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:0 5px;font-size:11px}
+
+  /* Tooltip for cell identification */
+  .cell-tooltip{position:absolute;pointer-events:none;background:rgba(15,23,42,0.92);color:#fff;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600;white-space:nowrap;transform:translate(-50%,-100%);margin-top:-12px;opacity:0;transition:opacity .15s;z-index:10;backdrop-filter:blur(4px)}
+  .cell-tooltip.visible{opacity:1}
+  .cell-tooltip .sub{font-weight:400;font-size:11px;opacity:0.75;display:block}
+
+  /* Quiz mode */
+  .quiz-bar{display:none;background:#fefce8;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;margin-top:8px;font-size:12.5px}
+  .quiz-bar.active{display:block}
+  .quiz-bar .score{font-weight:700;color:#92400e}
+  .quiz-btns{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+  .quiz-btns .qbtn{padding:5px 10px;border-radius:8px;border:1px solid #fde68a;background:#fffbeb;cursor:pointer;font-size:11.5px;font-weight:600;transition:all .15s}
+  .quiz-btns .qbtn:hover{background:#fef3c7}
+  .quiz-btns .qbtn.correct{background:#dcfce7;border-color:#86efac;animation:flash-correct .4s}
+  .quiz-btns .qbtn.wrong{background:#fee2e2;border-color:#fca5a5;animation:flash-wrong .4s}
+  @keyframes flash-correct{0%{transform:scale(1.1)}100%{transform:scale(1)}}
+  @keyframes flash-wrong{0%{transform:translateX(-4px)}25%{transform:translateX(4px)}50%{transform:translateX(-2px)}75%{transform:translateX(2px)}100%{transform:translateX(0)}}
+
+  /* Mode toggle */
+  .mode-toggle{display:flex;gap:4px;margin-top:8px}
+  .mode-toggle .tbtn{flex:1;padding:8px;text-align:center;border-radius:8px;border:1px solid var(--border);background:#fff;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s}
+  .mode-toggle .tbtn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .mode-toggle .tbtn:hover:not(.active){background:var(--accent-soft)}
+
+  /* Responsive */
+  @media(max-width:900px){
+    .app{grid-template-columns:1fr;max-width:100%}
+    .panel.left{max-height:none}
+    canvas#smear{max-height:60vh}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="panel left">
+    <h1>🔬 Simulador de Esfregaço — Leucograma v7</h1>
+    <div class="small">Campo navegável 4× com diferencial leucocitário por espécie, subtipos de neutrófilos, plaquetas. Clique nas células para identificá-las.</div>
+
+    <h2>Modo</h2>
+    <div class="mode-toggle">
+      <div class="tbtn active" id="modeExplore" onclick="setMode('explore')">🔍 Explorar</div>
+      <div class="tbtn" id="modeQuiz" onclick="setMode('quiz')">🧠 Quiz</div>
+    </div>
+    <div class="quiz-bar" id="quizBar">
+      Clique em uma célula e identifique-a. <span class="score" id="quizScore">0/0</span>
+      <div class="quiz-btns" id="quizBtns"></div>
+    </div>
+
+    <h2>Espécie e perfil clínico</h2>
+    <div class="ctrl">
+      <div class="row"><label for="especie">Espécie</label><span></span></div>
+      <select id="especie">
+        <option value="humano">Humano</option>
+        <option value="cao">Cão</option>
+        <option value="gato">Gato</option>
+        <option value="equino">Equino</option>
+        <option value="bovino">Bovino</option>
+        <option value="ovino">Ovino</option>
+        <option value="caprino">Caprino</option>
+        <option value="suino">Suíno</option>
+        <option value="coelho">Coelho</option>
+      </select>
+      <div class="row" style="margin-top:4px"><label for="perfil">Perfil clínico</label><span></span></div>
+      <select id="perfil">
+        <option value="normal">Leucograma padrão (normal)</option>
+        <option value="neutrofilia">Neutrofilia</option>
+        <option value="neutropenia">Neutropenia</option>
+        <option value="desvio_reg">Desvio à esquerda (regenerativo)</option>
+        <option value="desvio_deg">Desvio à esquerda (degenerativo)</option>
+        <option value="desvio_dir">Desvio à direita (hipersegmentação)</option>
+        <option value="linfocitose">Linfocitose</option>
+        <option value="linfopenia">Linfopenia (estresse/cortisol)</option>
+        <option value="monocitose">Monocitose</option>
+        <option value="eosinofilia">Eosinofilia</option>
+        <option value="eosinopenia">Eosinopenia (estresse)</option>
+        <option value="basofilia">Basofilia</option>
+        <option value="inflam_aguda">Leucocitose inflamatória aguda</option>
+        <option value="estresse">Leucocitose por estresse</option>
+        <option value="reacao_leucemoide">Reação leucemoide</option>
+        <option value="leucopenia">Leucopenia</option>
+        <option value="linfocitose_reativa">Linfocitose reativa</option>
+        <option value="inflam_cronica_ativa">Inflamação crônica ativa</option>
+        <option value="inflam_cronica_tardia">Inflamação crônica tardia</option>
+        <option value="alergia_parasitas">Alergia / Parasitoses</option>
+        <option value="hipercortisolismo">Hipercortisolismo / Terapia GC</option>
+        <option value="mieloproliferativa">Doença mieloproliferativa</option>
+      </select>
+      <div class="small">Os percentuais e contagem total são ajustados automaticamente à espécie e perfil.</div>
+    </div>
+
+    <h2>Parâmetros</h2>
+    <div class="ctrl">
+      <div class="row">
+        <label for="totalWBC">Leucócitos no campo</label>
+        <span><span id="totalWBCVal" class="badge">18</span></span>
+      </div>
+      <input id="totalWBC" type="range" min="0" max="80" value="18" step="1"/>
+      <div class="small" id="wbcAutoNote"></div>
+    </div>
+
+    <h2>Proporções dos leucócitos (%)</h2>
+    <div class="ctrl" id="sliders"></div>
+    <div class="small">Subtipos de neutrófilos calculados pelo perfil clínico.</div>
+    <div class="legend" id="legend"></div>
+
+    <h2>Ações</h2>
+    <div class="grid3">
+      <button id="regenerate" class="btn">🔄 Regenerar</button>
+      <button id="exportPng" class="btn">📷 Exportar PNG</button>
+      <button id="resetPerc" class="btn">↺ Resetar</button>
+    </div>
+
+    <h2>Mover campo</h2>
+    <div class="panner">
+      <div></div><button class="arrow" id="panUp">↑</button><div></div>
+      <button class="arrow" id="panLeft">←</button><div></div><button class="arrow" id="panRight">→</button>
+      <div></div><button class="arrow" id="panDown">↓</button><div></div>
+    </div>
+    <div class="mini">Arraste com mouse/toque · Teclas <span class="kbd">W</span><span class="kbd">A</span><span class="kbd">S</span><span class="kbd">D</span> ou setas</div>
+
+    <div class="note" id="note"></div>
+  </div>
+
+  <div class="panel" style="display:flex;flex-direction:column">
+    <div class="canvas-wrap" style="flex:1;position:relative">
+      <canvas id="smear" width="1200" height="800" aria-label="Campo microscópico simulado"></canvas>
+      <div class="cell-tooltip" id="tooltip"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ====== Constants ======
+const VIEW_W = 1200, VIEW_H = 800;
+const WORLD_SCALE = 2;
+const CANVAS_W = VIEW_W * WORLD_SCALE;
+const CANVAS_H = VIEW_H * WORLD_SCALE;
+const RBC_BASE_COUNT = 280;
+const RBC_COUNT = RBC_BASE_COUNT * WORLD_SCALE * WORLD_SCALE;
+const RBC_R_MEAN = 14, RBC_R_SD = 1.5;
+const WBC_R = 22;
+const PLATELET_COUNT_BASE = 80;
+const PLATELET_COUNT = PLATELET_COUNT_BASE * WORLD_SCALE * WORLD_SCALE;
+
+// ====== Canvases — layered for performance ======
+const rbcCanvas = document.createElement('canvas'); rbcCanvas.width=CANVAS_W; rbcCanvas.height=CANVAS_H;
+const rbcCtx = rbcCanvas.getContext('2d');
+const wbcCanvas = document.createElement('canvas'); wbcCanvas.width=CANVAS_W; wbcCanvas.height=CANVAS_H;
+const wbcCtx = wbcCanvas.getContext('2d');
+const viewCanvas = document.getElementById("smear");
+const viewCtx = viewCanvas.getContext("2d");
+
+// ====== Colors (Wright–Giemsa) ======
+const COLORS = {
+  nucleus: "#2b3b9a",
+  nucleusDark: "#1e2d7a",
+  cytoplasm: "#f2d6d6",
+  neutGranule: "rgba(90,70,160,0.22)",
+  eosGranule: "#e2572f",
+  eosGranuleDark: "#c9431f",
+  basoGranule: "#2b3b9a",
+  basoGranuleDark: "#1a2870",
+  monoCyt: "#bcc9d6",
+  lymphCyt: "#cfe3ff",
+  lymphReactiveCyt: "#a8c8f0",
+  rbc1: "#f4b5b5", rbc2: "#f0a4a4", rbcHighlight:"#ffdede", rbcShadow:"#e28d8d",
+  platelet: "#8b7ec8",
+  plateletGranule: "#6d5fad"
+};
+
+// ====== Categories ======
+const CATS = [
+  { key: "neutro", label: "Neutrófilos (total)", color:"#7c3aed" },
+  { key: "lymph",  label: "Linfócitos",          color:"#2563eb" },
+  { key: "mono",   label: "Monócitos",           color:"#0ea5e9" },
+  { key: "eos",    label: "Eosinófilos",         color:"#ef4444" },
+  { key: "baso",   label: "Basófilos",           color:"#111827" }
+];
+const NEUT_SUB = [
+  { key: "neutro_seg",  label: "Segmentados", color:"#6d28d9" },
+  { key: "neutro_band", label: "Em banda",    color:"#8b5cf6" },
+  { key: "neutro_hyper",label: "Hipersegmentados", color:"#a78bfa" }
+];
+
+// ====== Cell type labels (for tooltips/quiz) ======
+const CELL_LABELS = {
+  neutro_seg: {name:"Neutrófilo segmentado", desc:"Núcleo com 2-5 lobos conectados por filamentos"},
+  neutro_band: {name:"Neutrófilo em banda", desc:"Núcleo em C/U não segmentado — desvio à esquerda"},
+  neutro_hyper: {name:"Neutrófilo hipersegmentado", desc:"Núcleo com ≥6 lobos — desvio à direita"},
+  lymph: {name:"Linfócito", desc:"Célula pequena, núcleo arredondado, pouco citoplasma"},
+  lymph_reactive: {name:"Linfócito reativo", desc:"Linfócito grande com citoplasma abundante e basofílico"},
+  mono: {name:"Monócito", desc:"Célula grande, núcleo reniforme/lobulado, citoplasma acinzentado"},
+  eos: {name:"Eosinófilo", desc:"Núcleo bilobado, grânulos alaranjados grosseiros"},
+  baso: {name:"Basófilo", desc:"Grânulos metacromáticos densos azul-escuro cobrindo o núcleo"}
+};
+
+// ====== Species normals (refined) ======
+const NORMAL_SPECIES = {
+  humano: {neutro:58, lymph:32, mono:6, eos:3, baso:1},
+  cao:    {neutro:65, lymph:25, mono:6, eos:4, baso:0},
+  gato:   {neutro:60, lymph:32, mono:3, eos:4, baso:1},
+  equino: {neutro:63, lymph:28, mono:5, eos:3, baso:1},
+  bovino: {neutro:30, lymph:58, mono:5, eos:5, baso:2},
+  ovino:  {neutro:35, lymph:55, mono:3, eos:5, baso:2},
+  caprino:{neutro:38, lymph:52, mono:3, eos:5, baso:2},
+  suino:  {neutro:55, lymph:35, mono:6, eos:3, baso:1},
+  coelho: {neutro:35, lymph:55, mono:5, eos:3, baso:2}
+};
+
+// ====== WBC count multiplier per clinical profile ======
+const PROFILE_WBC_MULT = {
+  normal: 1.0,
+  neutrofilia: 1.4,
+  neutropenia: 0.6,
+  desvio_reg: 1.5,
+  desvio_deg: 0.7,
+  desvio_dir: 1.0,
+  linfocitose: 1.3,
+  linfopenia: 0.8,
+  monocitose: 1.1,
+  eosinofilia: 1.2,
+  eosinopenia: 0.9,
+  basofilia: 1.05,
+  inflam_aguda: 2.0,
+  estresse: 1.5,
+  reacao_leucemoide: 3.0,
+  leucopenia: 0.3,
+  linfocitose_reativa: 1.4,
+  inflam_cronica_ativa: 1.6,
+  inflam_cronica_tardia: 1.2,
+  alergia_parasitas: 1.3,
+  hipercortisolismo: 1.6,
+  mieloproliferativa: 2.5
+};
+
+// ====== Pattern computation ======
+function computePatternForSpecies(spec, pattern){
+  const base = {...(NORMAL_SPECIES[spec] || NORMAL_SPECIES.humano)};
+  const clamp01 = v => Math.max(0, Math.min(100, v));
+  const inc = (k, d) => base[k] = clamp01(base[k] + d);
+  const scale = (k, f) => base[k] = clamp01(base[k] * f);
+  switch(pattern){
+    case "normal": break;
+    case "neutrofilia": inc("neutro",+20); inc("lymph",-12); inc("eos",-6); inc("baso",-2); break;
+    case "neutropenia": inc("neutro",-25); inc("lymph",+18); inc("mono",+5); break;
+    case "desvio_reg":  inc("neutro",+15); inc("lymph",-10); inc("eos",-4); break;
+    case "desvio_deg":  inc("neutro",-5); inc("lymph",+6); inc("mono",+3); break;
+    case "desvio_dir":  inc("neutro",+5); inc("lymph",-3); break;
+    case "linfocitose": inc("lymph",+20); inc("neutro",-15); break;
+    case "linfopenia":  inc("lymph",-18); inc("neutro",+12); inc("mono",+4); inc("eos",-2); break;
+    case "monocitose":  inc("mono",+10); inc("neutro",-6); inc("lymph",-4); break;
+    case "eosinofilia": inc("eos",+8); inc("neutro",-6); inc("lymph",-2); break;
+    case "eosinopenia": inc("eos",-3); inc("neutro",+3); break;
+    case "basofilia":   inc("baso",+5); inc("eos",+2); inc("neutro",-5); break;
+    case "inflam_aguda":inc("neutro",+22); inc("lymph",-15); inc("mono",+3); inc("eos",-5); break;
+    case "estresse":    inc("neutro",+14); inc("lymph",-12); inc("mono",+4); inc("eos",-3); break;
+    case "reacao_leucemoide": inc("neutro",+30); inc("lymph",-18); inc("mono",+4); inc("eos",-6); break;
+    case "leucopenia":  scale("neutro",0.6); scale("lymph",0.8); break;
+    case "linfocitose_reativa": inc("lymph",+18); inc("neutro",-12); inc("mono",+2); break;
+    case "inflam_cronica_ativa": inc("neutro",+10); inc("mono",+8); inc("lymph",-14); break;
+    case "inflam_cronica_tardia":inc("mono",+15); inc("lymph",-10); inc("neutro",-2); break;
+    case "alergia_parasitas": inc("eos",+10); inc("lymph",+4); inc("neutro",-12); break;
+    case "hipercortisolismo": inc("neutro",+16); inc("lymph",-16); inc("mono",+4); inc("eos",-3); break;
+    case "mieloproliferativa": inc("neutro",+20); inc("baso",+4); inc("mono",+2); inc("lymph",-20); break;
+  }
+  let s=0; for(const k in base) s+=base[k];
+  for(const k in base) base[k] = s ? base[k]*100/s : 0;
+  return base;
+}
+
+function neutroSplit(pattern, neutroPct){
+  let seg=0.92, band=0.04, hyper=0.04;
+  switch(pattern){
+    case "desvio_reg": seg=0.78; band=0.22; hyper=0.00; break;
+    case "desvio_deg": seg=0.60; band=0.35; hyper=0.05; break;
+    case "desvio_dir": seg=0.55; band=0.00; hyper=0.45; break;
+    case "inflam_aguda": seg=0.76; band=0.22; hyper=0.02; break;
+    case "reacao_leucemoide": seg=0.72; band=0.25; hyper=0.03; break;
+    case "estresse": seg=0.95; band=0.02; hyper=0.03; break;
+    case "inflam_cronica_ativa": seg=0.82; band=0.15; hyper=0.03; break;
+    case "mieloproliferativa": seg=0.70; band=0.25; hyper=0.05; break;
+  }
+  return {seg:neutroPct*seg, band:neutroPct*band, hyper:neutroPct*hyper};
+}
+
+// ====== State ======
+const BASE_WBC = 18;
+let state = {
+  especie: "humano",
+  pattern: "normal",
+  perc: {...NORMAL_SPECIES.humano},
+  totalWBC: BASE_WBC,
+  userAdjustedWBC: false,
+  seed: Math.random()*1e9|0,
+  viewX: 0, viewY: 0,
+  mode: "explore"
+};
+
+// ====== Quiz state ======
+let quiz = { target: null, correct: 0, total: 0, locked: false };
+
+// ====== Utility ======
+function seededRandom(seed){ let x=seed||123456789; return function(){ x^=x<<13; x^=x>>>17; x^=x<<5; return (x>>>0)/4294967296; }; }
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+function normPerc(p){ const s=Object.values(p).reduce((a,b)=>a+b,0)||1; const out={}; for(const k in p) out[k]=p[k]*100/s; return out; }
+function randn(prng){ const u=prng()||1e-9, v=prng()||1e-9; return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+
+// ====== DOM refs ======
+const slidersDiv = document.getElementById("sliders");
+const legendDiv = document.getElementById("legend");
+const noteDiv = document.getElementById("note");
+const totalWBCSlider = document.getElementById("totalWBC");
+const totalWBCVal = document.getElementById("totalWBCVal");
+const wbcAutoNote = document.getElementById("wbcAutoNote");
+const perfilSel = document.getElementById("perfil");
+const especieSel = document.getElementById("especie");
+const tooltipEl = document.getElementById("tooltip");
+const quizBar = document.getElementById("quizBar");
+const quizBtns = document.getElementById("quizBtns");
+const quizScoreEl = document.getElementById("quizScore");
+
+// ====== Placement engine ======
+function placeNonOverlapping(count, radius, prng, margin, existing){
+  margin = margin || 4;
+  existing = existing || [];
+  if(count <= 0) return [];
+  const placed=[]; let tries=0, maxTries=Math.max(count*300, 500);
+  while(placed.length<count && tries<maxTries){
+    const x = margin+radius + prng()*(CANVAS_W-2*(margin+radius));
+    const y = margin+radius + prng()*(CANVAS_H-2*(margin+radius));
+    let ok=true;
+    const minDist = radius*2 + margin;
+    for(const p of placed){
+      const dx=p.x-x, dy=p.y-y;
+      if(dx*dx+dy*dy < (p.r+radius+margin)*(p.r+radius+margin)){ ok=false; break; }
+    }
+    if(ok){
+      for(const p of existing){
+        const dx=p.x-x, dy=p.y-y;
+        if(dx*dx+dy*dy < (p.r+radius+margin)*(p.r+radius+margin)){ ok=false; break; }
+      }
+    }
+    if(ok) placed.push({x,y,r:radius});
+    tries++;
+  }
+  return placed;
+}
+
+// ====== Drawing helpers ======
+function drawRBC(ctx,x,y,r){
+  const grad = ctx.createRadialGradient(x,y,r*0.3, x,y,r);
+  grad.addColorStop(0, COLORS.rbcHighlight); grad.addColorStop(0.7, COLORS.rbc1); grad.addColorStop(1, COLORS.rbc2);
+  ctx.fillStyle = grad; ctx.beginPath(); ctx.ellipse(x,y,r*1.05,r,0,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle = COLORS.rbcShadow; ctx.lineWidth=1; ctx.globalAlpha=0.35;
+  ctx.beginPath(); ctx.ellipse(x,y,r*0.7,r*0.7,0,0,Math.PI*2); ctx.stroke(); ctx.globalAlpha=1;
+}
+
+function drawPlatelet(ctx,x,y,prng){
+  const r = 3.5 + prng()*2;
+  const rot = prng()*Math.PI*2;
+  ctx.fillStyle = COLORS.platelet;
+  ctx.globalAlpha = 0.85;
+  ctx.beginPath(); ctx.ellipse(x,y,r*1.2,r*0.9,rot,0,Math.PI*2); ctx.fill();
+  // granules
+  ctx.fillStyle = COLORS.plateletGranule;
+  const ng = 2 + (prng()*3|0);
+  for(let i=0;i<ng;i++){
+    const a=prng()*Math.PI*2, d=prng()*r*0.5;
+    ctx.beginPath(); ctx.arc(x+Math.cos(a)*d, y+Math.sin(a)*d, 0.8+prng()*0.8, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+
+function drawCellBoundary(ctx,cx,cy,r,cytColor){
+  const grad = ctx.createRadialGradient(cx,cy,r*0.2, cx,cy,r);
+  grad.addColorStop(0, "#ffffff"); grad.addColorStop(0.5, cytColor); grad.addColorStop(1, cytColor);
+  ctx.fillStyle = grad; ctx.beginPath(); ctx.ellipse(cx,cy,r*1.05,r,0,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle = "rgba(0,0,0,0.1)"; ctx.lineWidth=1; ctx.stroke();
+}
+
+function drawGranules(ctx,cx,cy,r,count,color,prng){
+  ctx.fillStyle = color; ctx.globalAlpha=0.9;
+  for(let i=0;i<count;i++){
+    const ang=prng()*Math.PI*2, rad=prng()*r*0.82;
+    const x=cx+Math.cos(ang)*rad, y=cy+Math.sin(ang)*rad*0.9;
+    const rr = 1.0 + prng()*1.8;
+    ctx.beginPath(); ctx.ellipse(x,y,rr,rr,0,0,Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+
+function drawNucleusLobes(ctx,cx,cy,r,lobes,prng){
+  ctx.fillStyle = COLORS.nucleus; ctx.strokeStyle = COLORS.nucleus; ctx.lineWidth=2;
+  let angle=prng()*Math.PI*2;
+  const positions = [];
+  for(let i=0;i<lobes;i++){
+    const rr=r*0.36, a=angle + (i-(lobes-1)/2)*0.9;
+    const x=cx+Math.cos(a)*r*0.35, y=cy+Math.sin(a)*r*0.35;
+    positions.push({x,y,a,rr});
+    ctx.beginPath(); ctx.ellipse(x,y, rr*0.95, rr*1.05, a*0.2, 0, Math.PI*2); ctx.fill();
+  }
+  // filaments between lobes
+  ctx.globalAlpha=0.7; ctx.lineWidth=1.5;
+  for(let i=0;i<lobes-1;i++){
+    ctx.beginPath(); ctx.moveTo(positions[i].x, positions[i].y); ctx.lineTo(positions[i+1].x, positions[i+1].y); ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+}
+
+// Band nucleus — C/U shaped curve
+function drawBandNucleus(ctx,cx,cy,r,prng){
+  ctx.fillStyle = COLORS.nucleus;
+  const rot = prng()*Math.PI*2;
+  const thick = r*0.28;
+  const curveR = r*0.42;
+  // draw as thick arc (C-shape)
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.rotate(rot);
+  ctx.beginPath();
+  ctx.arc(0, 0, curveR, -Math.PI*0.8, Math.PI*0.8, false);
+  ctx.lineWidth = thick;
+  ctx.strokeStyle = COLORS.nucleus;
+  ctx.lineCap = "round";
+  ctx.stroke();
+  // fill the arc thicker
+  ctx.lineWidth = thick*0.85;
+  ctx.strokeStyle = COLORS.nucleusDark;
+  ctx.globalAlpha=0.3;
+  ctx.stroke();
+  ctx.globalAlpha=1;
+  ctx.restore();
+}
+
+function drawHyperNucleus(ctx,cx,cy,r,prng){
+  const lobes = 6 + (prng()*3|0);
+  drawNucleusLobes(ctx,cx,cy,r*0.95, lobes, prng);
+}
+
+// Basophil bilobed nucleus (underneath granules)
+function drawBasoNucleus(ctx,cx,cy,r,prng){
+  ctx.fillStyle = COLORS.nucleusDark;
+  ctx.globalAlpha = 0.4;
+  const rot = prng()*Math.PI;
+  // two lobes
+  ctx.beginPath(); ctx.ellipse(cx-r*0.25, cy, r*0.32, r*0.42, rot*0.2, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(cx+r*0.25, cy, r*0.32, r*0.42, -rot*0.2, 0, Math.PI*2); ctx.fill();
+  // connection
+  ctx.fillRect(cx-r*0.08, cy-r*0.12, r*0.16, r*0.24);
+  ctx.globalAlpha = 1;
+}
+
+// ====== WBC drawing functions (all take prng as parameter) ======
+function drawNeutrophilSeg(ctx,cx,cy,prng){
+  drawCellBoundary(ctx,cx,cy,WBC_R, COLORS.cytoplasm);
+  drawGranules(ctx,cx,cy,WBC_R, 55, COLORS.neutGranule, prng);
+  drawNucleusLobes(ctx,cx,cy,WBC_R, 3+(prng()*3|0), prng);
+}
+
+function drawNeutrophilBand(ctx,cx,cy,prng){
+  drawCellBoundary(ctx,cx,cy,WBC_R, COLORS.cytoplasm);
+  drawGranules(ctx,cx,cy,WBC_R, 45, COLORS.neutGranule, prng);
+  drawBandNucleus(ctx,cx,cy,WBC_R*0.85, prng);
+}
+
+function drawNeutrophilHyper(ctx,cx,cy,prng){
+  drawCellBoundary(ctx,cx,cy,WBC_R, COLORS.cytoplasm);
+  drawGranules(ctx,cx,cy,WBC_R, 55, COLORS.neutGranule, prng);
+  drawHyperNucleus(ctx,cx,cy,WBC_R, prng);
+}
+
+function drawLymphocyte(ctx,cx,cy,prng,reactive){
+  const cellR = reactive ? WBC_R*1.0 : WBC_R*0.82;
+  const cytColor = reactive ? COLORS.lymphReactiveCyt : COLORS.lymphCyt;
+  drawCellBoundary(ctx,cx,cy,cellR, cytColor);
+  ctx.fillStyle = COLORS.nucleus;
+  const nucR = reactive ? cellR*0.5 : cellR*0.72;
+  const offX = reactive ? -cellR*0.15 : 0;
+  ctx.beginPath(); ctx.ellipse(cx+offX,cy,nucR,nucR*1.04,0,0,Math.PI*2); ctx.fill();
+  if(reactive){
+    // azurophilic granules in reactive lymphocytes
+    ctx.fillStyle = "rgba(43,59,154,0.15)";
+    for(let i=0;i<8;i++){
+      const a=prng()*Math.PI*2, d=prng()*cellR*0.7;
+      ctx.beginPath(); ctx.arc(cx+Math.cos(a)*d, cy+Math.sin(a)*d, 1+prng(), 0, Math.PI*2); ctx.fill();
+    }
+  }
+}
+
+function drawMonocyte(ctx,cx,cy,prng){
+  drawCellBoundary(ctx,cx,cy,WBC_R*1.08, COLORS.monoCyt);
+  // kidney-shaped / lobulated nucleus
+  ctx.fillStyle = COLORS.nucleus;
+  const rot = prng()*Math.PI*0.4 - 0.2;
+  ctx.save(); ctx.translate(cx,cy); ctx.rotate(rot);
+  ctx.beginPath();
+  ctx.moveTo(-WBC_R*0.4, -WBC_R*0.45);
+  ctx.bezierCurveTo(-WBC_R*0.55, -WBC_R*0.1, -WBC_R*0.55, WBC_R*0.1, -WBC_R*0.4, WBC_R*0.45);
+  ctx.bezierCurveTo(-WBC_R*0.2, WBC_R*0.55, WBC_R*0.1, WBC_R*0.5, WBC_R*0.3, WBC_R*0.35);
+  ctx.bezierCurveTo(WBC_R*0.15, WBC_R*0.15, WBC_R*0.15, -WBC_R*0.15, WBC_R*0.3, -WBC_R*0.35);
+  ctx.bezierCurveTo(WBC_R*0.1, -WBC_R*0.5, -WBC_R*0.2, -WBC_R*0.55, -WBC_R*0.4, -WBC_R*0.45);
+  ctx.fill();
+  ctx.restore();
+  drawGranules(ctx,cx,cy,WBC_R, 14, "rgba(43,59,154,0.15)", prng);
+}
+
+function drawEosinophil(ctx,cx,cy,prng){
+  drawCellBoundary(ctx,cx,cy,WBC_R, COLORS.cytoplasm);
+  // bilobed nucleus
+  ctx.fillStyle = COLORS.nucleus;
+  const rot = prng()*0.5;
+  ctx.beginPath(); ctx.ellipse(cx-6,cy, WBC_R*0.36, WBC_R*0.44, rot, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(cx+6,cy, WBC_R*0.36, WBC_R*0.44, -rot, 0, Math.PI*2); ctx.fill();
+  // filament
+  ctx.strokeStyle = COLORS.nucleus; ctx.lineWidth=1.5; ctx.globalAlpha=0.7;
+  ctx.beginPath(); ctx.moveTo(cx-3,cy); ctx.lineTo(cx+3,cy); ctx.stroke(); ctx.globalAlpha=1;
+  // large refractile granules
+  drawGranules(ctx,cx,cy,WBC_R, 100, COLORS.eosGranule, prng);
+}
+
+function drawBasophil(ctx,cx,cy,prng){
+  drawCellBoundary(ctx,cx,cy,WBC_R, COLORS.cytoplasm);
+  // nucleus underneath
+  drawBasoNucleus(ctx,cx,cy,WBC_R, prng);
+  // dense metachromatic granules on top
+  drawGranules(ctx,cx,cy,WBC_R, 150, COLORS.basoGranule, prng);
+  // some extra large granules
+  ctx.fillStyle = COLORS.basoGranuleDark; ctx.globalAlpha=0.7;
+  for(let i=0;i<30;i++){
+    const a=prng()*Math.PI*2, d=prng()*WBC_R*0.75;
+    const rr=2+prng()*1.5;
+    ctx.beginPath(); ctx.arc(cx+Math.cos(a)*d, cy+Math.sin(a)*d*0.9, rr, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+
+const drawFns = {
+  neutro_seg: drawNeutrophilSeg,
+  neutro_band: drawNeutrophilBand,
+  neutro_hyper: drawNeutrophilHyper,
+  lymph: (ctx,x,y,prng)=>drawLymphocyte(ctx,x,y,prng,false),
+  lymph_reactive: (ctx,x,y,prng)=>drawLymphocyte(ctx,x,y,prng,true),
+  mono: drawMonocyte,
+  eos: drawEosinophil,
+  baso: drawBasophil
+};
+
+// ====== World data ======
+let worldPlacements = { rbc: [], wbc: [], platelets: [] };
+let rbcDirty = true;
+
+function generateRBCs(prng){
+  rbcCtx.clearRect(0,0,CANVAS_W,CANVAS_H);
+  worldPlacements.rbc = [];
+  for(let i=0;i<RBC_COUNT;i++){
+    const r = Math.max(RBC_R_MEAN-2.5, Math.min(RBC_R_MEAN+2.5, RBC_R_MEAN + randn(prng)*RBC_R_SD));
+    const x = r+8 + prng()*(CANVAS_W-2*(r+8));
+    const y = r+8 + prng()*(CANVAS_H-2*(r+8));
+    worldPlacements.rbc.push({x,y,r});
+  }
+  worldPlacements.rbc.sort((a,b)=>a.y-b.y);
+  worldPlacements.rbc.forEach(p => drawRBC(rbcCtx,p.x,p.y,p.r));
+  // Platelets on RBC layer
+  worldPlacements.platelets = [];
+  for(let i=0;i<PLATELET_COUNT;i++){
+    const x = 6 + prng()*(CANVAS_W-12);
+    const y = 6 + prng()*(CANVAS_H-12);
+    worldPlacements.platelets.push({x,y});
+    drawPlatelet(rbcCtx,x,y,prng);
+  }
+}
+
+function generateWBCs(prng){
+  wbcCtx.clearRect(0,0,CANVAS_W,CANVAS_H);
+  worldPlacements.wbc = [];
+  state.perc = normPerc(state.perc);
+  const worldTotalWBC = Math.round(state.totalWBC * WORLD_SCALE * WORLD_SCALE);
+
+  const split = neutroSplit(state.pattern, state.perc.neutro);
+  
+  // Determine if reactive lymphocytes should appear
+  const isReactive = (state.pattern === "linfocitose_reativa");
+  const lymphTotal = state.perc.lymph;
+  const lymphReactivePct = isReactive ? lymphTotal*0.35 : 0;
+  const lymphNormalPct = lymphTotal - lymphReactivePct;
+  
+  const finalPct = {
+    neutro_seg: split.seg,
+    neutro_band: split.band,
+    neutro_hyper: split.hyper,
+    lymph: lymphNormalPct,
+    lymph_reactive: lymphReactivePct,
+    mono: state.perc.mono,
+    eos: state.perc.eos,
+    baso: state.perc.baso
+  };
+  let ssum=0; for(const k in finalPct) ssum+=finalPct[k];
+  for(const k in finalPct) finalPct[k] = ssum ? finalPct[k]*100/ssum : 0;
+
+  const counts = {}; let sum=0;
+  for(const k in finalPct){ counts[k] = Math.max(0, Math.round(worldTotalWBC*finalPct[k]/100)); sum+=counts[k]; }
+  // Distribute rounding difference safely
+  let diff = worldTotalWBC - sum;
+  if(diff !== 0){
+    // Find the largest category to absorb the difference
+    let maxKey = "neutro_seg", maxVal = 0;
+    for(const k in counts) if(counts[k]>maxVal){maxVal=counts[k];maxKey=k;}
+    counts[maxKey] = Math.max(0, counts[maxKey]+diff);
+  }
+
+  let allPlaced = [];
+  for(const k of Object.keys(counts)){
+    if(counts[k]<=0) continue;
+    const pcs = placeNonOverlapping(counts[k], WBC_R*1.2, prng, 6, allPlaced);
+    pcs.forEach(p => { p.type=k; });
+    allPlaced = allPlaced.concat(pcs);
+  }
+  allPlaced.sort((a,b)=>a.y-b.y);
+  worldPlacements.wbc = allPlaced;
+  worldPlacements.wbc.forEach(p => drawFns[p.type](wbcCtx, p.x, p.y, prng));
+}
+
+function generateWorld(){
+  const prng = seededRandom(state.seed);
+  if(rbcDirty){
+    generateRBCs(prng);
+    rbcDirty = false;
+  } else {
+    // Advance PRNG past RBC generation to keep WBC deterministic
+    // We need the same number of calls
+    // Simpler: always use a separate seed for WBCs
+  }
+  const wbcPrng = seededRandom(state.seed + 999);
+  generateWBCs(wbcPrng);
+}
+
+function present(){
+  viewCtx.clearRect(0,0,VIEW_W,VIEW_H);
+  // Draw RBC layer
+  viewCtx.drawImage(rbcCanvas, state.viewX, state.viewY, VIEW_W, VIEW_H, 0, 0, VIEW_W, VIEW_H);
+  // Draw WBC layer
+  viewCtx.drawImage(wbcCanvas, state.viewX, state.viewY, VIEW_W, VIEW_H, 0, 0, VIEW_W, VIEW_H);
+
+  // Count visible cells
+  const local = {};
+  const vx=state.viewX, vy=state.viewY, x2=vx+VIEW_W, y2=vy+VIEW_H;
+  for(const p of worldPlacements.wbc){
+    if(p.x > vx-40 && p.x < x2+40 && p.y > vy-40 && p.y < y2+40){
+      local[p.type] = (local[p.type]||0)+1;
+    }
+  }
+  const localTotal = Object.values(local).reduce((a,b)=>a+b,0);
+
+  // HUD overlay
+  const pad=10;
+  viewCtx.globalAlpha=0.88;
+  viewCtx.fillStyle="rgba(255,255,255,0.9)";
+  const hudH = 52, hudW = Math.min(VIEW_W-20, 780);
+  viewCtx.fillRect(pad, VIEW_H-hudH-pad, hudW, hudH);
+  viewCtx.globalAlpha=1;
+  viewCtx.fillStyle="#111827";
+  viewCtx.font="bold 13px 'Segoe UI',system-ui,sans-serif";
+  let tx=pad+10, ty=VIEW_H-hudH-pad+18;
+  viewCtx.fillText(`Campo: ${localTotal} leucócitos`, tx, ty);
+  viewCtx.font="12px 'Segoe UI',system-ui,sans-serif";
+  tx+=160;
+  const displayPairs = [
+    ["Seg", local.neutro_seg||0, "#6d28d9"],
+    ["Banda", local.neutro_band||0, "#8b5cf6"],
+    ["Hiper", local.neutro_hyper||0, "#a78bfa"],
+    ["Linf", (local.lymph||0)+(local.lymph_reactive||0), "#2563eb"],
+    ["Mon", local.mono||0, "#0ea5e9"],
+    ["Eos", local.eos||0, "#ef4444"],
+    ["Baso", local.baso||0, "#111827"]
+  ];
+  displayPairs.forEach((p,i)=>{
+    const pct = localTotal ? Math.round(p[1]*100/localTotal) : 0;
+    const xx = tx + (i%4)*150;
+    const yy = ty + Math.floor(i/4)*20;
+    // color dot
+    viewCtx.fillStyle = p[2];
+    viewCtx.beginPath(); viewCtx.arc(xx,yy-4,4,0,Math.PI*2); viewCtx.fill();
+    viewCtx.fillStyle="#111827";
+    viewCtx.fillText(`${p[0]}: ${p[1]} (${pct}%)`, xx+10, yy);
+  });
+
+  noteDiv.innerHTML = `<b>${document.getElementById('especie').selectedOptions[0].text}</b> · ${document.getElementById('perfil').selectedOptions[0].text} · Total no mundo: ${Math.round(state.totalWBC * WORLD_SCALE * WORLD_SCALE)} leucócitos`;
+}
+
+// ====== Render control — FIX: only regenerate WBCs when needed ======
+function render(forceNew){
+  if(forceNew){
+    generateWorld();
+  }
+  present();
+}
+
+// ====== Cell identification (click/hover) ======
+function canvasToWorld(canvasX, canvasY){
+  const rect = viewCanvas.getBoundingClientRect();
+  const scaleX = VIEW_W / rect.width;
+  const scaleY = VIEW_H / rect.height;
+  return {
+    x: canvasX * scaleX + state.viewX,
+    y: canvasY * scaleY + state.viewY
+  };
+}
+
+function findCellAt(wx, wy){
+  let closest = null, closestDist = Infinity;
+  for(const p of worldPlacements.wbc){
+    const dx=p.x-wx, dy=p.y-wy;
+    const dist = Math.sqrt(dx*dx+dy*dy);
+    if(dist < WBC_R*1.2 && dist < closestDist){
+      closest = p;
+      closestDist = dist;
+    }
+  }
+  return closest;
+}
+
+function showTooltip(cell, clientX, clientY){
+  if(!cell){ tooltipEl.classList.remove("visible"); return; }
+  const info = CELL_LABELS[cell.type] || {name:cell.type, desc:""};
+  tooltipEl.innerHTML = `${info.name}<span class="sub">${info.desc}</span>`;
+  const wrapRect = viewCanvas.parentElement.getBoundingClientRect();
+  tooltipEl.style.left = (clientX - wrapRect.left) + "px";
+  tooltipEl.style.top = (clientY - wrapRect.top - 10) + "px";
+  tooltipEl.classList.add("visible");
+}
+
+// Mouse hover (explore mode)
+let hoverTimeout;
+viewCanvas.addEventListener("mousemove", function(e){
+  if(dragging) return;
+  if(state.mode !== "explore") return;
+  clearTimeout(hoverTimeout);
+  hoverTimeout = setTimeout(()=>{
+    const rect = viewCanvas.getBoundingClientRect();
+    const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+    const w = canvasToWorld(cx,cy);
+    const cell = findCellAt(w.x, w.y);
+    showTooltip(cell, e.clientX, e.clientY);
+    // Highlight cell
+    if(cell){
+      viewCanvas.style.cursor = "pointer";
+    } else {
+      viewCanvas.style.cursor = dragging ? "grabbing" : "grab";
+      tooltipEl.classList.remove("visible");
+    }
+  }, 60);
+});
+viewCanvas.addEventListener("mouseleave", ()=>{
+  tooltipEl.classList.remove("visible");
+  viewCanvas.style.cursor = "grab";
+});
+
+// Click — explore shows info, quiz checks answer
+viewCanvas.addEventListener("click", function(e){
+  if(dragging) return;
+  const rect = viewCanvas.getBoundingClientRect();
+  const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+  const w = canvasToWorld(cx,cy);
+  const cell = findCellAt(w.x, w.y);
+  if(!cell) return;
+
+  if(state.mode === "explore"){
+    showTooltip(cell, e.clientX, e.clientY);
+    // Flash highlight
+    highlightCell(cell);
+  } else if(state.mode === "quiz"){
+    if(quiz.locked) return;
+    quiz.target = cell;
+    showQuizOptions(cell);
+    highlightCell(cell);
+  }
+});
+
+function highlightCell(cell){
+  const rect = viewCanvas.getBoundingClientRect();
+  const scaleX = rect.width / VIEW_W;
+  const scaleY = rect.height / VIEW_H;
+  const sx = (cell.x - state.viewX)*scaleX;
+  const sy = (cell.y - state.viewY)*scaleY;
+  // Draw highlight ring on view canvas
+  viewCtx.save();
+  viewCtx.strokeStyle = "#facc15";
+  viewCtx.lineWidth = 3;
+  viewCtx.shadowColor = "#facc15";
+  viewCtx.shadowBlur = 8;
+  const drawX = cell.x - state.viewX;
+  const drawY = cell.y - state.viewY;
+  viewCtx.beginPath(); viewCtx.arc(drawX, drawY, WBC_R+5, 0, Math.PI*2); viewCtx.stroke();
+  viewCtx.restore();
+}
+
+// ====== Quiz mode ======
+function setMode(mode){
+  state.mode = mode;
+  document.getElementById("modeExplore").classList.toggle("active", mode==="explore");
+  document.getElementById("modeQuiz").classList.toggle("active", mode==="quiz");
+  quizBar.classList.toggle("active", mode==="quiz");
+  tooltipEl.classList.remove("visible");
+  if(mode==="quiz"){
+    quiz = {target:null, correct:0, total:0, locked:false};
+    quizScoreEl.textContent = "0/0";
+    quizBtns.innerHTML = '<div class="small">Clique em uma célula no campo para começar.</div>';
+  }
+}
+
+function showQuizOptions(cell){
+  quiz.locked = true;
+  quizBtns.innerHTML = "";
+  // Build option list
+  const allTypes = ["neutro_seg","neutro_band","neutro_hyper","lymph","lymph_reactive","mono","eos","baso"];
+  const correctType = cell.type;
+  // Always include correct + random others
+  let options = [correctType];
+  const others = allTypes.filter(t=>t!==correctType);
+  // Shuffle and pick 4-5 total
+  for(let i=others.length-1;i>0;i--){const j=Math.random()*i|0;[others[i],others[j]]=[others[j],others[i]];}
+  const numOpts = Math.min(5, allTypes.length);
+  while(options.length < numOpts && others.length > 0) options.push(others.pop());
+  // Shuffle options
+  for(let i=options.length-1;i>0;i--){const j=Math.random()*i|0;[options[i],options[j]]=[options[j],options[i]];}
+
+  options.forEach(type=>{
+    const btn = document.createElement("div");
+    btn.className = "qbtn";
+    btn.textContent = (CELL_LABELS[type]||{name:type}).name;
+    btn.addEventListener("click", ()=>{
+      quiz.total++;
+      if(type === correctType){
+        quiz.correct++;
+        btn.classList.add("correct");
+      } else {
+        btn.classList.add("wrong");
+        // Show correct
+        quizBtns.querySelectorAll(".qbtn").forEach(b=>{
+          if(b.textContent === CELL_LABELS[correctType].name) b.classList.add("correct");
+        });
+      }
+      quizScoreEl.textContent = `${quiz.correct}/${quiz.total}`;
+      setTimeout(()=>{
+        quiz.locked = false;
+        quizBtns.innerHTML = '<div class="small">Clique em outra célula para continuar.</div>';
+        present(); // Clear highlight
+      }, 1200);
+    });
+    quizBtns.appendChild(btn);
+  });
+}
+
+// ====== Mouse/touch panning ======
+let dragging=false, lastX=0, lastY=0, dragMoved=false;
+viewCanvas.addEventListener("mousedown", e=>{
+  dragging=true; dragMoved=false; lastX=e.clientX; lastY=e.clientY;
+});
+window.addEventListener("mousemove", e=>{
+  if(!dragging) return;
+  const dx=e.clientX-lastX, dy=e.clientY-lastY;
+  if(Math.abs(dx)>2||Math.abs(dy)>2) dragMoved=true;
+  lastX=e.clientX; lastY=e.clientY;
+  state.viewX = clamp(state.viewX-dx, 0, CANVAS_W-VIEW_W);
+  state.viewY = clamp(state.viewY-dy, 0, CANVAS_H-VIEW_H);
+  present();
+});
+window.addEventListener("mouseup", ()=>{ dragging=false; });
+
+// Override click to ignore if it was a drag
+viewCanvas.addEventListener("click", function(e){
+  if(dragMoved){ dragMoved=false; e.stopImmediatePropagation(); }
+}, true);
+
+viewCanvas.addEventListener("touchstart", e=>{
+  if(e.touches.length===1){ dragging=true; dragMoved=false; lastX=e.touches[0].clientX; lastY=e.touches[0].clientY; }
+}, {passive:true});
+viewCanvas.addEventListener("touchmove", e=>{
+  if(dragging && e.touches.length===1){
+    const dx=e.touches[0].clientX-lastX, dy=e.touches[0].clientY-lastY;
+    if(Math.abs(dx)>2||Math.abs(dy)>2) dragMoved=true;
+    lastX=e.touches[0].clientX; lastY=e.touches[0].clientY;
+    state.viewX = clamp(state.viewX-dx, 0, CANVAS_W-VIEW_W);
+    state.viewY = clamp(state.viewY-dy, 0, CANVAS_H-VIEW_H);
+    present();
+  }
+}, {passive:true});
+viewCanvas.addEventListener("touchend", ()=> dragging=false);
+
+// ====== Keyboard (fixed: ignore when in input/select) ======
+const PAN_STEP = 160;
+window.addEventListener("keydown", e => {
+  const tag = e.target.tagName;
+  if(tag==="INPUT"||tag==="SELECT"||tag==="TEXTAREA") return;
+  let handled = false;
+  if(e.key==='w'||e.key==='W'||e.key==='ArrowUp'){ state.viewY=clamp(state.viewY-PAN_STEP,0,CANVAS_H-VIEW_H); handled=true; }
+  if(e.key==='s'||e.key==='S'||e.key==='ArrowDown'){ state.viewY=clamp(state.viewY+PAN_STEP,0,CANVAS_H-VIEW_H); handled=true; }
+  if(e.key==='a'||e.key==='A'||e.key==='ArrowLeft'){ state.viewX=clamp(state.viewX-PAN_STEP,0,CANVAS_W-VIEW_W); handled=true; }
+  if(e.key==='d'||e.key==='D'||e.key==='ArrowRight'){ state.viewX=clamp(state.viewX+PAN_STEP,0,CANVAS_W-VIEW_W); handled=true; }
+  if(handled){ e.preventDefault(); present(); }
+});
+
+// ====== Panner buttons ======
+document.getElementById("panUp").addEventListener("click", ()=>{ state.viewY=clamp(state.viewY-PAN_STEP,0,CANVAS_H-VIEW_H); present(); });
+document.getElementById("panDown").addEventListener("click", ()=>{ state.viewY=clamp(state.viewY+PAN_STEP,0,CANVAS_H-VIEW_H); present(); });
+document.getElementById("panLeft").addEventListener("click", ()=>{ state.viewX=clamp(state.viewX-PAN_STEP,0,CANVAS_W-VIEW_W); present(); });
+document.getElementById("panRight").addEventListener("click", ()=>{ state.viewX=clamp(state.viewX+PAN_STEP,0,CANVAS_W-VIEW_W); present(); });
+
+// ====== Sliders & UI ======
+function buildSliders(){
+  slidersDiv.innerHTML=""; legendDiv.innerHTML="";
+  CATS.forEach(t => {
+    const row = document.createElement("div"); row.className="row";
+    const label = document.createElement("label"); label.textContent=t.label; label.setAttribute("for","p_"+t.key);
+    const val = document.createElement("span"); val.className="badge"; val.id="v_"+t.key; val.textContent=state.perc[t.key].toFixed(0);
+    row.appendChild(label); row.appendChild(val);
+    const rng = document.createElement("input"); rng.type="range"; rng.min=0; rng.max=100; rng.step=1; rng.value=state.perc[t.key]; rng.id="p_"+t.key;
+    rng.addEventListener("input", e=>{
+      state.perc[t.key]=+e.target.value;
+      document.getElementById("v_"+t.key).textContent=(+e.target.value).toFixed(0);
+      render(true);
+    });
+    slidersDiv.appendChild(row); slidersDiv.appendChild(rng);
+    const leg=document.createElement("div"); leg.className="item"; leg.innerHTML=`<span class="dot" style="background:${t.color}"></span>${t.label}`;
+    legendDiv.appendChild(leg);
+  });
+  NEUT_SUB.forEach(s=>{
+    const leg=document.createElement("div"); leg.className="item"; leg.innerHTML=`<span class="dot" style="background:${s.color}"></span>${s.label}`;
+    legendDiv.appendChild(leg);
+  });
+  // Add reactive lymphocyte to legend if applicable
+  if(state.pattern === "linfocitose_reativa"){
+    const leg=document.createElement("div"); leg.className="item"; leg.innerHTML=`<span class="dot" style="background:#5b8dd9"></span>Linf. reativo`;
+    legendDiv.appendChild(leg);
+  }
+  totalWBCSlider.value=state.totalWBC; totalWBCVal.textContent=state.totalWBC;
+}
+
+totalWBCSlider.addEventListener("input", e=>{
+  state.totalWBC=+e.target.value;
+  state.userAdjustedWBC = true;
+  totalWBCVal.textContent=state.totalWBC;
+  render(true);
+});
+
+perfilSel.addEventListener("change", e=>{
+  state.pattern=e.target.value;
+  applySpeciesPattern();
+});
+especieSel.addEventListener("change", e=>{
+  state.especie=e.target.value;
+  rbcDirty=true; // New species = new RBCs
+  applySpeciesPattern();
+});
+
+function applySpeciesPattern(){
+  state.perc = computePatternForSpecies(state.especie, state.pattern);
+  // Auto-adjust WBC count if user hasn't manually set it
+  if(!state.userAdjustedWBC){
+    const mult = PROFILE_WBC_MULT[state.pattern] || 1.0;
+    state.totalWBC = Math.round(BASE_WBC * mult);
+    totalWBCSlider.value = state.totalWBC;
+    totalWBCVal.textContent = state.totalWBC;
+    const multText = mult > 1 ? `↑ ${mult}×` : mult < 1 ? `↓ ${mult}×` : "";
+    wbcAutoNote.textContent = multText ? `Contagem auto-ajustada (${multText} do basal)` : "";
+  }
+  buildSliders();
+  render(true);
+}
+
+document.getElementById("regenerate").addEventListener("click", ()=>{
+  state.seed = Math.random()*1e9|0;
+  rbcDirty = true;
+  render(true);
+});
+document.getElementById("exportPng").addEventListener("click", ()=>{
+  const link = document.createElement("a");
+  link.download = `esfregaco_${state.especie}_${state.pattern}.png`;
+  link.href = viewCanvas.toDataURL("image/png");
+  link.click();
+});
+document.getElementById("resetPerc").addEventListener("click", ()=>{
+  state.pattern="normal"; perfilSel.value="normal";
+  state.userAdjustedWBC = false;
+  state.perc = {...(NORMAL_SPECIES[state.especie]||NORMAL_SPECIES.humano)};
+  state.totalWBC = BASE_WBC;
+  wbcAutoNote.textContent = "";
+  buildSliders();
+  render(true);
+});
+
+// ====== Init ======
+function init(){
+  especieSel.value="humano";
+  perfilSel.value="normal";
+  state.perc = {...NORMAL_SPECIES[state.especie]};
+  state.viewX = Math.floor((CANVAS_W-VIEW_W)/2);
+  state.viewY = Math.floor((CANVAS_H-VIEW_H)/2);
+  buildSliders();
+  render(true);
+}
+init();
+</script>
+</body>
+</html>
