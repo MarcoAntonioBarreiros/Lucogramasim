@@ -38,7 +38,7 @@
   .legend .item{display:flex;align-items:center;gap:5px;font-size:11px;color:#111827;background:#f3f4f6;padding:3px 7px;border-radius:999px}
   .dot{width:9px;height:9px;border-radius:999px;display:inline-block;flex-shrink:0}
   .canvas-wrap{position:relative;width:100%;display:flex;align-items:center;justify-content:center}
-  canvas#smear{width:100%;height:auto;background:#fafafa;border-radius:var(--radius);box-shadow:inset 0 0 0 1px var(--border);cursor:grab}
+  canvas#smear{width:100%;height:auto;background:#fafafa;border-radius:var(--radius);box-shadow:inset 0 0 0 1px var(--border);cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none}
   canvas#smear:active{cursor:grabbing}
   .note{font-size:11.5px;color:#6b7280;margin-top:8px;line-height:1.3;min-height:1.3em}
   .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
@@ -77,6 +77,18 @@
     .panel.left{max-height:none}
     canvas#smear{max-height:60vh}
   }
+
+@media(max-width:620px){
+  .app{padding:8px;gap:10px}
+  .panel{padding:12px}
+  .panel.right{order:-1}          /* campo primeiro, controles depois */
+  canvas#smear{max-height:52vh}
+  .btn{font-size:13px;padding:12px 10px;min-height:44px}
+  .qbtn{font-size:13px;padding:11px 12px;min-height:44px}
+  .panner button{min-width:44px;min-height:44px}
+  select,input[type=range]{min-height:44px}
+  select{font-size:16px}          /* evita o zoom automático do iOS */
+}
 </style>
 </head>
 <body>
@@ -170,7 +182,7 @@
     <div class="note" id="note"></div>
   </div>
 
-  <div class="panel" style="display:flex;flex-direction:column">
+  <div class="panel right" style="display:flex;flex-direction:column">
     <div class="canvas-wrap" style="flex:1;position:relative">
       <canvas id="smear" width="1200" height="800" aria-label="Campo microscópico simulado"></canvas>
       <div class="cell-tooltip" id="tooltip"></div>
@@ -770,7 +782,7 @@ function findCellAt(wx, wy){
 
 function showTooltip(cell, clientX, clientY){
   if(!cell){ tooltipEl.classList.remove("visible"); return; }
-  const info = CELL_LABELS[cell.type] || {name:cell.type, desc:""};
+  const info = nomeCelula(cell.type);
   tooltipEl.innerHTML = `${info.name}<span class="sub">${info.desc}</span>`;
   const wrapRect = viewCanvas.parentElement.getBoundingClientRect();
   tooltipEl.style.left = (clientX - wrapRect.left) + "px";
@@ -857,7 +869,18 @@ function setMode(mode){
   }
 }
 
-function showQuizOptions(cell){
+
+    // No coelho o equivalente funcional do neutrófilo é o heterófilo (pseudoeosinófilo):
+    // grânulos acidófilos, aspecto distinto do neutrófilo de carnívoros.
+    function nomeCelula(type){
+      var info = CELL_LABELS[type] || {name:type, desc:""};
+      if(state.especie === "coelho" && type.indexOf("neutro") === 0){
+        return {name: info.name.replace(/Neutr\u00f3filo/,"Heter\u00f3filo"), desc: info.desc};
+      }
+      return info;
+    }
+
+    function showQuizOptions(cell){
   quiz.locked = true;
   quizBtns.innerHTML = "";
   // Build option list
@@ -867,16 +890,16 @@ function showQuizOptions(cell){
   let options = [correctType];
   const others = allTypes.filter(t=>t!==correctType);
   // Shuffle and pick 4-5 total
-  for(let i=others.length-1;i>0;i--){const j=Math.random()*i|0;[others[i],others[j]]=[others[j],others[i]];}
+  for(let i=others.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[others[i],others[j]]=[others[j],others[i]];}
   const numOpts = Math.min(5, allTypes.length);
   while(options.length < numOpts && others.length > 0) options.push(others.pop());
   // Shuffle options
-  for(let i=options.length-1;i>0;i--){const j=Math.random()*i|0;[options[i],options[j]]=[options[j],options[i]];}
+  for(let i=options.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[options[i],options[j]]=[options[j],options[i]];}
 
   options.forEach(type=>{
     const btn = document.createElement("div");
     btn.className = "qbtn";
-    btn.textContent = (CELL_LABELS[type]||{name:type}).name;
+    btn.textContent = nomeCelula(type).name;
     btn.addEventListener("click", ()=>{
       quiz.total++;
       if(type === correctType){
@@ -886,7 +909,7 @@ function showQuizOptions(cell){
         btn.classList.add("wrong");
         // Show correct
         quizBtns.querySelectorAll(".qbtn").forEach(b=>{
-          if(b.textContent === CELL_LABELS[correctType].name) b.classList.add("correct");
+          if(b.textContent === nomeCelula(correctType).name) b.classList.add("correct");
         });
       }
       quizScoreEl.textContent = `${quiz.correct}/${quiz.total}`;
@@ -931,9 +954,9 @@ viewCanvas.addEventListener("touchmove", e=>{
     lastX=e.touches[0].clientX; lastY=e.touches[0].clientY;
     state.viewX = clamp(state.viewX-dx, 0, CANVAS_W-VIEW_W);
     state.viewY = clamp(state.viewY-dy, 0, CANVAS_H-VIEW_H);
-    present();
+    present(); e.preventDefault();
   }
-}, {passive:true});
+}, {passive:false});
 viewCanvas.addEventListener("touchend", ()=> dragging=false);
 
 // ====== Keyboard (fixed: ignore when in input/select) ======
