@@ -5,43 +5,76 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Hematopoiese Interativa</title>
 <style>
-html,body{margin:0;min-height:100%;background:#07111f;color:#eef4ff;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.boot{min-height:100vh;display:grid;place-items:center;padding:24px;text-align:center}.boot small{display:block;color:#9fb0c8;margin-top:8px}
+html,body{margin:0;min-height:100%;background:#07111f;color:#eef4ff;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.boot{min-height:100vh;display:grid;place-items:center;padding:24px;text-align:center}.boot small{display:block;color:#9fb0c8;margin-top:8px;line-height:1.5}.boot code{color:#fbbf24}
 </style>
 </head>
 <body>
-<div class="boot" id="boot"><div><strong>Carregando Hematopoiese Interativa…</strong><small>Preparando a atividade.</small></div></div>
+<div class="boot" id="boot"><div><strong>Carregando Hematopoiese Interativa…</strong><small id="status">Preparando a atividade.</small></div></div>
 <script>
 (async()=>{
+  const status=document.getElementById('status');
+  const urls=['data-1.txt','data-2.txt'];
+
+  function decodeBase64(b64){
+    const clean=b64.replace(/\s+/g,'');
+    const raw=atob(clean);
+    const bytes=new Uint8Array(raw.length);
+    for(let i=0;i<raw.length;i++) bytes[i]=raw.charCodeAt(i);
+    return bytes;
+  }
+
+  async function readWithFetch(url){
+    const absolute=new URL(url,location.href).href+'?v=3';
+    const r=await fetch(absolute,{cache:'no-store',credentials:'same-origin'});
+    if(!r.ok) throw new Error(url+' respondeu HTTP '+r.status);
+    return await r.text();
+  }
+
+  function readWithIframe(url){
+    return new Promise((resolve,reject)=>{
+      const f=document.createElement('iframe');
+      f.style.cssText='position:fixed;width:1px;height:1px;left:-9999px;top:-9999px;border:0;opacity:0';
+      const timer=setTimeout(()=>{try{f.remove()}catch(_){};reject(new Error('tempo esgotado ao abrir '+url));},12000);
+      f.onload=()=>{
+        clearTimeout(timer);
+        try{
+          const txt=(f.contentDocument&&f.contentDocument.body?f.contentDocument.body.innerText:'').trim();
+          f.remove();
+          if(!txt || txt.startsWith('<!DOCTYPE') || txt.includes('Page not found')) throw new Error('conteúdo inválido em '+url);
+          resolve(txt);
+        }catch(e){try{f.remove()}catch(_){};reject(e)}
+      };
+      f.onerror=()=>{clearTimeout(timer);try{f.remove()}catch(_){};reject(new Error('falha ao abrir '+url));};
+      f.src=new URL(url,location.href).href+'?v=3';
+      document.body.appendChild(f);
+    });
+  }
+
+  async function readPart(url){
+    try{
+      return await readWithFetch(url);
+    }catch(fetchError){
+      status.textContent='Usando carregamento alternativo para '+url+'…';
+      return await readWithIframe(url);
+    }
+  }
+
   try{
     if(!('DecompressionStream' in window)) throw new Error('Este navegador precisa ser atualizado para abrir a atividade.');
-
-    const urls=['data-1.txt','data-2.txt'];
-
-    const chunks=await Promise.all(urls.map(async u=>{
-      const r=await fetch(u,{cache:'no-store'});
-      if(!r.ok) throw new Error('Falha ao carregar '+u);
-      const b64=(await r.text()).trim();
-      const raw=atob(b64);
-      const bytes=new Uint8Array(raw.length);
-      for(let i=0;i<raw.length;i++) bytes[i]=raw.charCodeAt(i);
-      return bytes;
-    }));
-
+    status.textContent='Carregando os dados da atividade…';
+    const texts=await Promise.all(urls.map(readPart));
+    const chunks=texts.map(decodeBase64);
     const total=chunks.reduce((n,c)=>n+c.length,0);
     const bin=new Uint8Array(total);
     let offset=0;
-    for(const chunk of chunks){
-      bin.set(chunk,offset);
-      offset+=chunk.length;
-    }
-
+    for(const chunk of chunks){bin.set(chunk,offset);offset+=chunk.length;}
+    status.textContent='Montando a simulação…';
     const stream=new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip'));
     const html=await new Response(stream).text();
-    document.open();
-    document.write(html);
-    document.close();
+    if(!html.includes('<html')&&!html.includes('<!DOCTYPE')) throw new Error('O conteúdo reconstruído não é um HTML válido.');
+    document.open();document.write(html);document.close();
   }catch(e){
-    document.getElementById('boot').innerHTML='<div><strong>Não foi possível abrir a atividade.</strong><small>'+String(e.message||e)+'</small></div>';
+    document.getElementById('boot').innerHTML='<div><strong>Não foi possível abrir a atividade.</strong><small>'+String(e.message||e)+'</small><small>Arquivos esperados: <code>data-1.txt</code> e <code>data-2.txt</code>.</small></div>';
   }
 })();
 </script>
